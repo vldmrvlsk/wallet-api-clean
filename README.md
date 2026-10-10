@@ -1,4 +1,3 @@
-
 # Wallet API
 
 Асинхронное REST API для управления электронными кошельками. Приложение позволяет получать баланс кошелька, пополнять его и списывать средства с проверкой достаточности баланса.
@@ -35,8 +34,8 @@
 ### 1. Клонирование репозитория
 
 ```bash
-git clone https://github.com/vldmrvlsk/wallet-api.git
-cd wallet-api
+git clone https://github.com/vldmrvlsk/wallet-api-clean.git
+cd wallet-api-clean
 ```
 
 ### 2. Настройка переменных окружения
@@ -67,8 +66,8 @@ docker compose ps
 
 Откройте документацию API:
 
-- Главная страница: http://localhost:8000/
-- Swagger UI: http://localhost:8000/docs
+- Главная страница: http://localhost:18010/
+- Swagger UI: http://localhost:18010/docs
 
 Остановка контейнеров:
 
@@ -82,22 +81,22 @@ docker compose down
 
 Приложение использует следующие переменные:
 
-| Переменная | Назначение |
-|---|---|
-| `POSTGRES_DB` | Имя базы данных |
-| `POSTGRES_USER` | Пользователь PostgreSQL |
-| `POSTGRES_PASSWORD` | Пароль пользователя PostgreSQL |
-| `DATABASE_URL` | URL подключения приложения к базе данных |
+| Переменная          | Назначение                               |
+| ------------------- | ---------------------------------------- |
+| `POSTGRES_DB`       | Имя базы данных                          |
+| `POSTGRES_USER`     | Пользователь PostgreSQL                  |
+| `POSTGRES_PASSWORD` | Пароль пользователя PostgreSQL           |
+| `DATABASE_URL`      | URL подключения приложения к базе данных |
 
 В Docker Compose переменная `DATABASE_URL` формируется из настроек PostgreSQL. Для локального запуска приложения и тестов её нужно задавать отдельно.
 
 ## API endpoints
 
-| Метод | Endpoint | Описание |
-|---|---|---|
-| GET | `/` | Проверка доступности API |
-| GET | `/api/v1/wallets/{wallet_uuid}` | Получение кошелька и его баланса |
-| POST | `/api/v1/wallets/{wallet_uuid}/operation` | Пополнение или списание средств |
+| Метод | Endpoint                                  | Описание                         |
+| ----- | ----------------------------------------- | -------------------------------- |
+| GET   | `/`                                       | Проверка доступности API         |
+| GET   | `/api/v1/wallets/{wallet_uuid}`           | Получение кошелька и его баланса |
+| POST  | `/api/v1/wallets/{wallet_uuid}/operation` | Пополнение или списание средств  |
 
 ### Получение кошелька
 
@@ -195,7 +194,7 @@ python -m pip install -r requirements.txt
 Для Windows CMD задайте URL тестовой базы:
 
 ```cmd
-set DATABASE_URL=postgresql+asyncpg://wallet_user:YOUR_PASSWORD@localhost:5432/wallet_test_db
+set DATABASE_URL=postgresql+asyncpg://wallet_user:YOUR_PASSWORD@localhost:5433/wallet_test_db
 ```
 
 Замените `YOUR_PASSWORD` на пароль пользователя PostgreSQL. Не публикуйте его и не добавляйте настоящий URL с паролем в Git.
