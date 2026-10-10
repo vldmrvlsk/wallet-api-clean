@@ -44,7 +44,6 @@ async def ensure_test_database() -> None:
         "postgresql://",
         1,
     )
-    test_database_url = get_test_database_url(database_url)
 
     connection = await asyncpg.connect(
         database_url.rsplit("/", 1)[0] + "/postgres"
