@@ -12,6 +12,7 @@
 - Транзакции и блокировка строки при изменении баланса.
 - Миграции базы данных через Alembic.
 - Автоматизированные тесты, включая проверку параллельных списаний.
+- Автоматическое создание тестовой базы данных и применение миграций перед запуском тестов.
 - Запуск API и PostgreSQL через Docker Compose.
 
 ## Технологии
@@ -23,7 +24,7 @@
 - SQLAlchemy 2 (async)
 - asyncpg
 - Alembic
-- pytest, httpx
+- pytest, pytest-asyncio, httpx
 - Docker, Docker Compose
 - Git, GitHub
 
@@ -75,7 +76,9 @@ docker compose ps
 docker compose down
 ```
 
-Данные PostgreSQL хранятся в Docker volume, созданном Docker Compose, и сохраняются после обычной остановки контейнеров. Команда `docker compose down -v` удаляет этот volume вместе с данными, поэтому без необходимости её использовать не следует.
+Данные PostgreSQL хранятся в Docker volume, созданном Docker Compose, и сохраняются после обычной остановки контейнеров.
+
+Команда `docker compose down -v` удаляет этот volume вместе с данными, поэтому без необходимости её использовать не следует.
 
 ## Переменные окружения
 
@@ -157,7 +160,7 @@ Content-Type: application/json
 - `409 Conflict` — недостаточно средств для списания.
 - `422 Unprocessable Entity` — входные данные не прошли валидацию.
 
-Сумма операции должна быть положительной.
+Сумма операции должна быть положительной и содержать не более двух знаков после запятой.
 
 ## Миграции базы данных
 
@@ -175,6 +178,8 @@ docker compose exec api alembic current
 
 При локальном запуске Alembic необходимо предварительно задать `DATABASE_URL`.
 
+При первом запуске приложения миграции необходимо применить отдельно, если они ещё не были применены. Для этого используется команда `alembic upgrade head`, приведённая выше.
+
 ## Тестирование
 
 Тесты используют отдельную базу данных `wallet_test_db`. Не запускайте тесты против основной базы `wallet_db`, поскольку тесты могут изменять данные.
@@ -184,30 +189,25 @@ docker compose exec api alembic current
 Убедитесь, что Docker Desktop запущен, и выполните:
 
 ```cmd
-docker compose up -d
+docker compose up -d --build
 ```
 
-### 2. Создание тестовой базы данных
+### 2. Запуск тестов
 
-Создайте отдельную базу для тестов:
+Выполните одну команду:
 
 ```cmd
-docker compose exec db psql -U wallet_user -d wallet_db -c "CREATE DATABASE wallet_test_db"
+docker compose exec api python scripts/run_tests.py
 ```
 
-Эту команду нужно выполнить только один раз для конкретной базы данных. Если `wallet_test_db` уже существует, повторно создавать её не нужно.
+Скрипт `scripts/run_tests.py` автоматически:
 
-### 3. Применение миграций к тестовой базе
+- проверяет наличие тестовой базы `wallet_test_db`;
+- создаёт её, если она отсутствует;
+- применяет миграции Alembic к тестовой базе;
+- запускает тесты с подробным выводом результатов.
 
-```cmd
-docker compose exec api python -c "import os; u=os.environ['DATABASE_URL']; os.environ['DATABASE_URL']=u.rsplit('/',1)[0]+'/wallet_test_db'; import alembic.config; alembic.config.main(argv=['upgrade','head'])"
-```
-
-### 4. Запуск тестов
-
-```cmd
-docker compose exec api python -c "import os; u=os.environ['DATABASE_URL']; os.environ['DATABASE_URL']=u.rsplit('/',1)[0]+'/wallet_test_db'; import pytest; raise SystemExit(pytest.main(['-v']))"
-```
+При повторном запуске скрипт использует существующую тестовую базу и применяет только недостающие миграции.
 
 Тесты проверяют:
 
@@ -216,9 +216,12 @@ docker compose exec api python -c "import os; u=os.environ['DATABASE_URL']; os.e
 - пополнение;
 - успешное списание;
 - списание при недостаточном балансе;
-- параллельные списания.
+- параллельные списания;
+- отклонение нулевой суммы;
+- отклонение отрицательной суммы;
+- отклонение суммы с более чем двумя знаками после запятой.
 
-После первоначальной настройки тестовой базы повторять шаги 2 и 3 при каждом запуске тестов не требуется, если база и миграции сохранены.
+Для успешного завершения все тесты должны пройти. Если тесты завершаются с ошибкой, проверьте сообщение в терминале.
 
 Не используйте `docker compose down -v` для обычной остановки проекта: эта команда удаляет тома Docker с данными.
 
@@ -232,6 +235,8 @@ wallet-api-clean/
 ├── migrations/
 │   ├── versions/
 │   └── env.py
+├── scripts/
+│   └── run_tests.py
 ├── tests/
 │   ├── conftest.py
 │   └── test_wallets.py
