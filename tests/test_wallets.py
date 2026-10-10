@@ -107,3 +107,28 @@ async def test_concurrent_withdrawals(client, test_wallet):
 
     assert balance_response.status_code == 200
     assert Decimal(balance_response.json()["balance"]) == Decimal("20.00")
+
+
+
+@pytest.mark.asyncio(loop_scope="session")
+@pytest.mark.parametrize(
+    "amount",
+    ["0", "-10.00", "10.123"],
+)
+async def test_invalid_amount(client, test_wallet, amount):
+    response = await client.post(
+        f"/api/v1/wallets/{test_wallet}/operation",
+        json={
+            "operation_type": "DEPOSIT",
+            "amount": amount,
+        },
+    )
+
+    assert response.status_code == 422
+
+    balance_response = await client.get(
+        f"/api/v1/wallets/{test_wallet}"
+    )
+
+    assert balance_response.status_code == 200
+    assert Decimal(balance_response.json()["balance"]) == Decimal("100.00")
