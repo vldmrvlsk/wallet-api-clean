@@ -1,3 +1,4 @@
+
 import asyncio
 import uuid
 from decimal import Decimal
@@ -74,7 +75,7 @@ async def test_withdraw_insufficient_funds(client, test_wallet):
     assert response.status_code == 409
     assert response.json()["detail"] == "Insufficient funds"
 
-    # Проверяем, что неудачная операция не изменила баланс.
+    # Неудачная операция не должна менять баланс.
     balance_response = await client.get(
         f"/api/v1/wallets/{test_wallet}"
     )
@@ -140,14 +141,11 @@ async def test_invalid_amount(client, test_wallet, amount):
 @pytest.mark.asyncio(loop_scope="session")
 async def test_database_rejects_negative_balance(test_wallet):
     async with SessionLocal() as session:
-        # Сохраняем исходный баланс кошелька.
         result = await session.execute(
             select(Wallet.balance).where(Wallet.id == test_wallet)
         )
         original_balance = result.scalar_one()
 
-        # Пытаемся напрямую записать отрицательный баланс,
-        # минуя валидацию FastAPI.
         statement = (
             update(Wallet)
             .where(Wallet.id == test_wallet)
@@ -157,13 +155,48 @@ async def test_database_rejects_negative_balance(test_wallet):
         with pytest.raises(IntegrityError):
             await session.execute(statement)
 
-        # После ошибки PostgreSQL требует откатить транзакцию.
+        # После нарушения ограничения транзакцию необходимо откатить.
         await session.rollback()
 
-        # Проверяем, что исходный баланс сохранился.
         result = await session.execute(
             select(Wallet.balance).where(Wallet.id == test_wallet)
         )
         actual_balance = result.scalar_one()
 
         assert actual_balance == original_balance
+        assert actual_balance == Decimal("100.00")
+
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_transaction_rolls_back_on_error(test_wallet):
+    async with SessionLocal() as session:
+        with pytest.raises(RuntimeError, match="Simulated failure"):
+            async with session.begin():
+                result = await session.execute(
+                    select(Wallet.balance).where(
+                        Wallet.id == test_wallet
+                    )
+                )
+                original_balance = result.scalar_one()
+
+                result = await session.execute(
+                    select(Wallet)
+                    .where(Wallet.id == test_wallet)
+                    .with_for_update()
+                )
+                wallet = result.scalar_one()
+
+                wallet.balance += Decimal("50.00")
+
+                # Имитируем ошибку до фиксации транзакции.
+                raise RuntimeError("Simulated failure")
+
+        # Контекст транзакции выполнил rollback.
+        # Проверяем баланс в новой транзакции.
+        result = await session.execute(
+            select(Wallet.balance).where(Wallet.id == test_wallet)
+        )
+        actual_balance = result.scalar_one()
+
+        assert actual_balance == original_balance
+        assert actual_balance == Decimal("100.00")
