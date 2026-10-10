@@ -1,4 +1,10 @@
 
+from sqlalchemy import update
+from sqlalchemy.exc import IntegrityError
+
+from app.db import SessionLocal
+from app.models import Wallet
+
 import asyncio
 import uuid
 from decimal import Decimal
@@ -132,3 +138,17 @@ async def test_invalid_amount(client, test_wallet, amount):
 
     assert balance_response.status_code == 200
     assert Decimal(balance_response.json()["balance"]) == Decimal("100.00")
+
+@pytest.mark.asyncio(loop_scope="session")
+async def test_database_rejects_negative_balance(test_wallet):
+    async with SessionLocal() as session:
+        statement = (
+            update(Wallet)
+            .where(Wallet.id == test_wallet)
+            .values(balance=Decimal("-1.00"))
+        )
+
+        with pytest.raises(IntegrityError):
+            await session.execute(statement)
+
+        await session.rollback()
