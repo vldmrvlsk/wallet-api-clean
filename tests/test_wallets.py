@@ -1,15 +1,13 @@
-
-from sqlalchemy import update
-from sqlalchemy.exc import IntegrityError
-
-from app.db import SessionLocal
-from app.models import Wallet
-
 import asyncio
 import uuid
 from decimal import Decimal
 
 import pytest
+from sqlalchemy import select, update
+from sqlalchemy.exc import IntegrityError
+
+from app.db import SessionLocal
+from app.models import Wallet
 
 
 @pytest.mark.asyncio(loop_scope="session")
@@ -115,7 +113,6 @@ async def test_concurrent_withdrawals(client, test_wallet):
     assert Decimal(balance_response.json()["balance"]) == Decimal("20.00")
 
 
-
 @pytest.mark.asyncio(loop_scope="session")
 @pytest.mark.parametrize(
     "amount",
@@ -139,9 +136,18 @@ async def test_invalid_amount(client, test_wallet, amount):
     assert balance_response.status_code == 200
     assert Decimal(balance_response.json()["balance"]) == Decimal("100.00")
 
+
 @pytest.mark.asyncio(loop_scope="session")
 async def test_database_rejects_negative_balance(test_wallet):
     async with SessionLocal() as session:
+        # Сохраняем исходный баланс кошелька.
+        result = await session.execute(
+            select(Wallet.balance).where(Wallet.id == test_wallet)
+        )
+        original_balance = result.scalar_one()
+
+        # Пытаемся напрямую записать отрицательный баланс,
+        # минуя валидацию FastAPI.
         statement = (
             update(Wallet)
             .where(Wallet.id == test_wallet)
@@ -151,4 +157,13 @@ async def test_database_rejects_negative_balance(test_wallet):
         with pytest.raises(IntegrityError):
             await session.execute(statement)
 
+        # После ошибки PostgreSQL требует откатить транзакцию.
         await session.rollback()
+
+        # Проверяем, что исходный баланс сохранился.
+        result = await session.execute(
+            select(Wallet.balance).where(Wallet.id == test_wallet)
+        )
+        actual_balance = result.scalar_one()
+
+        assert actual_balance == original_balance
