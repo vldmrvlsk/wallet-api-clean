@@ -40,7 +40,7 @@ cd wallet-api-clean
 
 ### 2. Настройка переменных окружения
 
-Создайте локальный файл `.env` на основе шаблона:
+Создайте локальный файл `.env` на основе шаблона.
 
 **Windows CMD:**
 
@@ -75,28 +75,28 @@ docker compose ps
 docker compose down
 ```
 
-Данные PostgreSQL хранятся в Docker volume `postgres_data` и сохраняются после обычной остановки контейнеров. Команда `docker compose down -v` удаляет этот volume, поэтому без необходимости её использовать не следует.
+Данные PostgreSQL хранятся в Docker volume, созданном Docker Compose, и сохраняются после обычной остановки контейнеров. Команда `docker compose down -v` удаляет этот volume вместе с данными, поэтому без необходимости её использовать не следует.
 
 ## Переменные окружения
 
 Приложение использует следующие переменные:
 
-| Переменная          | Назначение                               |
-| ------------------- | ---------------------------------------- |
-| `POSTGRES_DB`       | Имя базы данных                          |
-| `POSTGRES_USER`     | Пользователь PostgreSQL                  |
-| `POSTGRES_PASSWORD` | Пароль пользователя PostgreSQL           |
-| `DATABASE_URL`      | URL подключения приложения к базе данных |
+| Переменная | Назначение |
+| --- | --- |
+| `POSTGRES_DB` | Имя основной базы данных |
+| `POSTGRES_USER` | Пользователь PostgreSQL |
+| `POSTGRES_PASSWORD` | Пароль пользователя PostgreSQL |
+| `DATABASE_URL` | URL подключения приложения к базе данных |
 
 В Docker Compose переменная `DATABASE_URL` формируется из настроек PostgreSQL. Для локального запуска приложения и тестов её нужно задавать отдельно.
 
 ## API endpoints
 
-| Метод | Endpoint                                  | Описание                         |
-| ----- | ----------------------------------------- | -------------------------------- |
-| GET   | `/`                                       | Проверка доступности API         |
-| GET   | `/api/v1/wallets/{wallet_uuid}`           | Получение кошелька и его баланса |
-| POST  | `/api/v1/wallets/{wallet_uuid}/operation` | Пополнение или списание средств  |
+| Метод | Endpoint | Описание |
+| --- | --- | --- |
+| GET | `/` | Проверка доступности API |
+| GET | `/api/v1/wallets/{wallet_uuid}` | Получение кошелька и его баланса |
+| POST | `/api/v1/wallets/{wallet_uuid}/operation` | Пополнение или списание средств |
 
 ### Получение кошелька
 
@@ -179,32 +179,34 @@ docker compose exec api alembic current
 
 Тесты используют отдельную базу данных `wallet_test_db`. Не запускайте тесты против основной базы `wallet_db`, поскольку тесты могут изменять данные.
 
-### 1. Установка зависимостей
+### 1. Запуск контейнеров
 
-При необходимости создайте и активируйте виртуальное окружение, затем установите зависимости:
+Убедитесь, что Docker Desktop запущен, и выполните:
 
 ```cmd
-python -m pip install -r requirements.txt
+docker compose up -d
 ```
 
-### 2. Настройка подключения к тестовой базе
+### 2. Создание тестовой базы данных
 
-Убедитесь, что PostgreSQL запущен, а база `wallet_test_db` создана.
-
-Для Windows CMD задайте URL тестовой базы:
+Создайте отдельную базу для тестов:
 
 ```cmd
-set DATABASE_URL=postgresql+asyncpg://wallet_user:YOUR_PASSWORD@localhost:5433/wallet_test_db
+docker compose exec db psql -U wallet_user -d wallet_db -c "CREATE DATABASE wallet_test_db"
 ```
 
-Замените `YOUR_PASSWORD` на пароль пользователя PostgreSQL. Не публикуйте его и не добавляйте настоящий URL с паролем в Git.
+Эту команду нужно выполнить только один раз для конкретной базы данных. Если `wallet_test_db` уже существует, повторно создавать её не нужно.
 
-Переменная действует только в текущем окне CMD.
-
-### 3. Запуск тестов
+### 3. Применение миграций к тестовой базе
 
 ```cmd
-python -m pytest -v
+docker compose exec api python -c "import os; u=os.environ['DATABASE_URL']; os.environ['DATABASE_URL']=u.rsplit('/',1)[0]+'/wallet_test_db'; import alembic.config; alembic.config.main(argv=['upgrade','head'])"
+```
+
+### 4. Запуск тестов
+
+```cmd
+docker compose exec api python -c "import os; u=os.environ['DATABASE_URL']; os.environ['DATABASE_URL']=u.rsplit('/',1)[0]+'/wallet_test_db'; import pytest; raise SystemExit(pytest.main(['-v']))"
 ```
 
 Тесты проверяют:
@@ -216,10 +218,14 @@ python -m pytest -v
 - списание при недостаточном балансе;
 - параллельные списания.
 
+После первоначальной настройки тестовой базы повторять шаги 2 и 3 при каждом запуске тестов не требуется, если база и миграции сохранены.
+
+Не используйте `docker compose down -v` для обычной остановки проекта: эта команда удаляет тома Docker с данными.
+
 ## Структура проекта
 
 ```text
-wallet-api/
+wallet-api-clean/
 ├── app/
 │   ├── db.py
 │   └── models.py
@@ -252,4 +258,4 @@ wallet-api/
 
 ## Репозиторий
 
-Исходный репозиторий: https://github.com/vldmrvlsk/wallet-api
+Исходный код: https://github.com/vldmrvlsk/wallet-api-clean
